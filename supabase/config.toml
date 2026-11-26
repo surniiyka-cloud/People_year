@@ -1,0 +1,2 @@
+[functions.people-api]
+verify_jwt = false

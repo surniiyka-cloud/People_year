@@ -1,21 +1,37 @@
 # People Year · ТИАН-Трейд
 
-Рабочая серверная версия: Python HTTP + SQLite, без Битрикс и регистрации. Данные и коды не включены. Для небольшого внутреннего голосования, один экземпляр сервера, постоянный диск. Перед публичным использованием нужна проверка безопасности и HTTPS reverse proxy; ограничение запросов в приложении не заменяет защиту на прокси.
+Frontend: GitHub Pages. Backend: Supabase Edge Function `people-api` with an atomic, service-role-only PostgreSQL RPC. Data stays in the private `people` schema. The original Python server is retained for Railway rollback.
 
-## Локально (PowerShell)
-```
-python -m pip install -r requirements.txt
-$env:ADMIN_PASSWORD = 'замените-на-длинный-случайный-пароль'
-$env:SECURE_COOKIE = '0'
-python server.py
-```
-Открыть http://localhost:8080/admin для администратора, http://localhost:8080 для сотрудников. Локальный режим только для тестов. В production `SECURE_COOKIE=1`, HTTPS, сильный пароль из секретов окружения, постоянный диск, резервные копии базы. Не публиковать базу или CSV с кодами.
+## Deployment
 
-## Порядок работы
-Настройки → импорт исходного справочника XLSX (номер A, ФИО B, табельный номер F, строки-заголовки подразделений). Импорт обновляет и добавляет записи, но не удаляет отсутствующих. Коды → подразделение → выпуск CSV → личная рассылка вручную. Коды хранятся только как SHA-256, случайные 72 бита. Перевыпуск аннулирует старый. Настройки → открыть. Участие → список непроголосовавших и выгрузка Excel. Закрыть сезон → итоговый рейтинг и Excel. Закрытие необратимо.
+Production URL: https://surniiyka-cloud.github.io/People_year/
+Admin: https://surniiyka-cloud.github.io/People_year/admin/
+Supabase project: gsxroprhnimtrzjhvuah. No API key is needed in the frontend. The Edge Function uses only Supabase's built-in SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment secrets.
 
-## Конфиденциальность
-Голос и факт участия записываются в одной атомарной транзакции, но в разных таблицах без связующего идентификатора и без времени голоса. В административном интерфейсе доступны участие и итоговый рейтинг, не индивидуальный выбор. Рейтинг скрыт до закрытия, чтобы нельзя было вычислять голоса по изменениям счётчика. Это не криптографически доказуемая анонимность: оператор сервера с низкоуровневым доступом может наблюдать записи/транзакции, а малые группы могут позволять догадки. Не включать логирование тела запросов. Не пересылать коды посторонним.
+1. Apply `supabase/people_schema.sql` for a fresh database, then `supabase/migrations/20261126090000_api.sql`. Never reset an existing database.
+2. Set the administrator bcrypt hash in `people.admin_credential` using a trusted management connection. Do not put passwords, hashes or migration data in Git.
+3. Deploy `supabase/functions/people-api/index.ts` as `people-api`, with JWT gateway verification disabled: this function authenticates its own 256-bit bearer sessions. Both the SQL RPC and underlying tables reject anon/authenticated access.
+4. Run `node --test tests/static.test.mjs`, `deno check supabase/functions/people-api/index.ts`, and `node scripts/build.mjs`. Publish only `dist/`.
+5. Pages currently uses the `gh-pages` branch, root directory. The supplied Actions workflow can build from main after the migration is merged and Pages Source is changed to GitHub Actions. Do not merge merely to deploy Pages: main is still connected to Railway.
 
-## Ограничения версии
-Один администратор с паролем, нет MFA, нет редактирования/блокировки сотрудников в интерфейсе, нет импорта архивных голосов; справочник обновляется импортом. Сессии и ограничение попыток в памяти (при перезапуске сбрасываются). Нужна проверка на реальном хостинге, в том числе резервное копирование, HTTPS, доступность и нагрузка. Для более строгой защиты использовать отдельный сервис авторизации и аудит безопасности. GitHub Pages не подходит для сервера; Dockerfile рассчитан на хостинг с постоянным томом /data.
+## Private data migration and restoration
+
+Use Node 24+: `node scripts/prepare-import.mjs --sqlite PATH_TO_BACKUP PRIVATE_SQL_OUTSIDE_REPO`. The command reads SQLite in read-only mode, checks integrity and foreign keys, then prepares one transaction that refuses a nonempty target. Apply that private SQL through a trusted database connection; never upload it to GitHub, Actions artifacts or Pages. For a JSON backup downloaded from the admin panel, use `--json` instead. Admin credentials and sessions are deliberately excluded from backups. A restore into a new project requires recreating the admin credential separately.
+
+Compare every restored row, including IDs, code hashes, used flags and ballot candidates. A matching backup does not by itself prove the live Railway database has no newer writes. Keep Railway running until a fresh live backup is reconciled and the new public URL is verified.
+
+## Behavior and privacy
+
+All original admin tabs, employee editing/activation, code generation/reissue/revocation, seasons, test reset, turnout, Google Forms archive matching and XLSX import/export are preserved. XLSX exports neutralize formula prefixes. Uploads have compressed/decompressed size and worksheet limits. Backup format is now JSON, rather than SQLite.
+
+Codes keep their original SHA-256 hashes. Random codes are shown only on issue. Sessions last one hour, are stored as hashes in PostgreSQL, and survive function restarts. The frontend keeps its bearer token in sessionStorage, isolated to its browser tab. Never include the token in a URL. Login rate limits persist in PostgreSQL (12 attempts per IP / 5 minutes, 180 globally).
+
+Votes and participation flags are written atomically under a transaction lock. A ballot contains only a random ID, season and candidate, with no voter ID or timestamp. Self votes, repeated votes, inactive voters/candidates, revoked sessions and closed seasons are rejected server-side. Ranking is hidden until closing. Admin backups contain confidential raw data, so store them securely. Operators with privileged database access can observe transactions; this is not cryptographic anonymity. No application request bodies, passwords, codes or ballots are logged by the function.
+
+## Tests
+
+`node --test tests/static.test.mjs` checks deployment paths, asset retention and client/security boundaries. `python -m unittest test_server.py` checks the retained legacy server. `tests/test_edge.py` exercises the deployed API with a dedicated season 2099 and two synthetic employee IDs; supply PEOPLE_TEST_PASSWORD through a secure environment. Run it only during maintenance; it opens a test season briefly. Afterwards remove that season, the two synthetic employees and the archive labeled __migration_test_archive through the trusted management connection, then repeat the full backup comparison.
+
+## Rollback
+
+Railway remains connected to main and its original persistent volume. Do not delete the Railway service or volume until final live reconciliation. If switching back after accepting votes on Supabase, export and reconcile those votes first; two independent writable databases must not both be used for the same season.

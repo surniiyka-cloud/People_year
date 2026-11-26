@@ -3,3 +3,13 @@ data/
 *.xlsx
 *.csv
 __pycache__/
+*.sqlite*
+*.db
+*.sql.private
+*.backup.json
+*.credentials*
+.env.*
+!.env.example
+node_modules/
+dist/
+.supabase/
