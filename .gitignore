@@ -1,5 +1,0 @@
-data/
-.env
-*.xlsx
-*.csv
-__pycache__/
