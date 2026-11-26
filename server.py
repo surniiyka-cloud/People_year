@@ -72,8 +72,8 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         self.path=urlsplit(self.path).path
         if self.path=='/admin/':self.path='/admin'
-        if self.path in ('/','/admin','/style.css','/app.js'):
-            p=ROOT/'static'/({'/':'index.html','/admin':'index.html','/style.css':'style.css','/app.js':'app.js'}[self.path]);b=p.read_bytes();self.send_response(200);self.send_header('X-Content-Type-Options','nosniff');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Type',{'html':'text/html; charset=utf-8','css':'text/css','js':'text/javascript; charset=utf-8'}[p.suffix[1:]]);self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
+        if self.path in ('/','/admin','/style.css','/app.js','/favicon.svg'):
+            p=ROOT/'static'/({'/':'index.html','/admin':'index.html','/style.css':'style.css','/app.js':'app.js','/favicon.svg':'favicon.svg'}[self.path]);b=p.read_bytes();self.send_response(200);self.send_header('X-Content-Type-Options','nosniff');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Type',{'html':'text/html; charset=utf-8','css':'text/css','js':'text/javascript; charset=utf-8','svg':'image/svg+xml'}[p.suffix[1:]]);self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
         self.api({})
     def do_POST(self):
         self.path=urlsplit(self.path).path
