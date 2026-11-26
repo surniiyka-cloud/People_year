@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS ballot(id TEXT PRIMARY KEY,year INTEGER REFERENCES se
 INSERT OR IGNORE INTO season(year) VALUES(2026);''')
         if not any(r['name']=='is_test' for r in c.execute('PRAGMA table_info(season)')):
             c.execute('ALTER TABLE season ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0')
+            c.execute("UPDATE season SET is_test=1 WHERE year=2027 AND status='closed'")
         c.execute("CREATE TABLE IF NOT EXISTS archive_batch(id TEXT PRIMARY KEY,label TEXT NOT NULL)")
         c.execute("CREATE TABLE IF NOT EXISTS archive_name(batch TEXT REFERENCES archive_batch(id),raw TEXT NOT NULL,n INTEGER NOT NULL,employee TEXT REFERENCES employee(id),PRIMARY KEY(batch,raw))")
 def digest(code): return hashlib.sha256(code.encode()).hexdigest()
@@ -96,7 +97,10 @@ class H(BaseHTTPRequestHandler):
                 if not s:return self.send({'role':None} if path=='/api/state' else {'error':'Войдите в систему'},200 if path=='/api/state' else 401)
                 if s['role']=='voter':
                     y,e=s['year'],s['employee'];p=c.execute('SELECT p.used,s.status,s.is_test,e.active FROM participation p JOIN season s USING(year) JOIN employee e ON e.id=p.employee WHERE p.year=? AND p.employee=? AND p.code_hash=?',(y,e,s['hash'])).fetchone()
-                    if not p or not p['active']:return self.send({'error':'Доступ отозван'},403)
+                    if not p or not p['active']:
+                        SESS.pop(sid,None)
+                        if path=='/api/state':return self.send({'role':None},cookie='')
+                        return self.send({'error':'Доступ отозван'},403,cookie='')
                     if path=='/api/state':return self.send({'role':'voter','year':y,'used':bool(p['used']),'status':p['status'],'is_test':bool(p['is_test'])})
                     if path=='/api/search' and self.command=='POST':
                         if p['used'] or p['status']!='open':raise ValueError('Голосование недоступно')
@@ -117,6 +121,7 @@ class H(BaseHTTPRequestHandler):
                 status=c.execute('SELECT status,is_test FROM season WHERE year=?',(y,)).fetchone()
                 if path=='/api/new-season':
                     if not 2026<=y<=2100:raise ValueError('Неверный год')
+                    if y==2026 and d.get('is_test'):raise ValueError('Основной сезон не может быть тестовым')
                     c.execute('INSERT INTO season(year,is_test) VALUES(?,?)',(y,int(bool(d.get('is_test')))));c.commit();return self.send({'ok':True})
                 if not status:raise ValueError('Сезон не найден')
                 is_test=bool(status[1]);status=status[0]
@@ -153,7 +158,7 @@ class H(BaseHTTPRequestHandler):
                 if path=='/api/status':
                     new=d.get('status');allowed={'draft':'open','open':'closed'}
                     if allowed.get(status)!=new:raise ValueError('Недопустимый переход')
-                    if new=='open' and not c.execute('SELECT 1 FROM participation WHERE year=?',(y,)).fetchone():raise ValueError('Сначала выдайте коды')
+                    if new=='open' and not c.execute('SELECT 1 FROM participation p JOIN employee e ON e.id=p.employee WHERE p.year=? AND p.code_hash IS NOT NULL AND e.active=1',(y,)).fetchone():raise ValueError('Сначала выдайте коды')
                     c.execute('UPDATE season SET status=? WHERE year=?',(new,y));c.commit();return self.send({'ok':True})
                 if path=='/api/archive-import':
                     raw=base64.b64decode(d['file'],validate=True);bid=hashlib.sha256(raw).hexdigest()
