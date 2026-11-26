@@ -119,7 +119,7 @@ class H(BaseHTTPRequestHandler):
                 if path=='/api/state':return self.send({'role':'admin','seasons':rows(c,'SELECT * FROM season ORDER BY year DESC')})
                 if self.command!='POST':return self.send({'error':'Нет маршрута'},404)
                 y=int(d.get('year',2026));
-                if path in ('/api/new-season','/api/import','/api/codes','/api/status','/api/employee-save','/api/employee-toggle','/api/reset-test','/api/archive-import','/api/archive-match'):c.execute('BEGIN IMMEDIATE')
+                if path in ('/api/new-season','/api/import','/api/codes','/api/status','/api/employee-save','/api/employee-toggle','/api/reset-test','/api/archive-import','/api/archive-match','/api/reset-codes'):c.execute('BEGIN IMMEDIATE')
                 status=c.execute('SELECT status,is_test FROM season WHERE year=?',(y,)).fetchone()
                 if path=='/api/new-season':
                     if not 2026<=y<=2100:raise ValueError('Неверный год')
@@ -127,6 +127,10 @@ class H(BaseHTTPRequestHandler):
                     c.execute('INSERT INTO season(year,is_test) VALUES(?,?)',(y,int(bool(d.get('is_test')))));c.commit();return self.send({'ok':True})
                 if not status:raise ValueError('Сезон не найден')
                 is_test=bool(status[1]);status=status[0]
+                if path=='/api/reset-codes':
+                    if d.get('confirm')!=str(y):raise ValueError('Подтвердите номер сезона')
+                    n=c.execute('UPDATE participation SET code_hash=NULL WHERE year=? AND code_hash IS NOT NULL',(y,)).rowcount
+                    c.commit();return self.send({'ok':True,'revoked':n})
                 if path=='/api/reset-test':
                     if not is_test or y==2026:raise ValueError('Сброс разрешён только тестовым сезонам')
                     if status=='open':raise ValueError('Сначала закройте тестовое голосование')
