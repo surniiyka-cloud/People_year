@@ -109,7 +109,7 @@ class H(BaseHTTPRequestHandler):
                 if path=='/api/state':return self.send({'role':'admin','seasons':rows(c,'SELECT * FROM season ORDER BY year DESC')})
                 if self.command!='POST':return self.send({'error':'Нет маршрута'},404)
                 y=int(d.get('year',2026));
-                if path in ('/api/new-season','/api/import','/api/codes','/api/status'):c.execute('BEGIN IMMEDIATE')
+                if path in ('/api/new-season','/api/import','/api/codes','/api/status','/api/employee-save','/api/employee-toggle'):c.execute('BEGIN IMMEDIATE')
                 status=c.execute('SELECT status FROM season WHERE year=?',(y,)).fetchone()
                 if path=='/api/new-season':
                     if not 2026<=y<=2100:raise ValueError('Неверный год')
@@ -117,7 +117,19 @@ class H(BaseHTTPRequestHandler):
                 if not status:raise ValueError('Сезон не найден')
                 status=status[0]
                 if path=='/api/dashboard':
-                    a=rows(c,'SELECT e.id,e.name,e.city,e.active,COALESCE(p.used,0) used,CASE WHEN p.code_hash IS NULL THEN 0 ELSE 1 END issued FROM employee e LEFT JOIN participation p ON e.id=p.employee AND p.year=? WHERE e.active=1 OR p.used=1 ORDER BY e.name',(y,));r=rows(c,'SELECT e.name,e.city,COUNT(*) votes FROM ballot b JOIN employee e ON e.id=b.candidate WHERE b.year=? GROUP BY e.id ORDER BY votes DESC,e.name',(y,)) if status=='closed' else [];return self.send({'employees':a,'ranking':r,'status':status})
+                    a=rows(c,'SELECT e.id,e.name,e.city,e.active,COALESCE(p.used,0) used,CASE WHEN p.code_hash IS NULL THEN 0 ELSE 1 END issued FROM employee e LEFT JOIN participation p ON e.id=p.employee AND p.year=? ORDER BY e.name',(y,));r=rows(c,'SELECT e.name,e.city,COUNT(*) votes FROM ballot b JOIN employee e ON e.id=b.candidate WHERE b.year=? GROUP BY e.id ORDER BY votes DESC,e.name',(y,)) if status=='closed' else [];return self.send({'employees':a,'ranking':r,'status':status})
+                if path in ('/api/employee-save','/api/employee-toggle'):
+                    if c.execute("SELECT 1 FROM season WHERE status='open'").fetchone():raise ValueError('Изменение справочника доступно только вне открытого голосования')
+                    eid=str(d.get('id','')).strip();name=str(d.get('name','')).strip();city=str(d.get('city','')).strip()
+                    if not eid:raise ValueError('Введите табельный номер')
+                    if path=='/api/employee-toggle':
+                        if c.execute('UPDATE employee SET active=? WHERE id=?',(int(bool(d.get('active'))),eid)).rowcount!=1:raise ValueError('Сотрудник не найден')
+                    else:
+                        if not name or not city:raise ValueError('Заполните ФИО и подразделение')
+                        if d.get('edit'):
+                            if c.execute('UPDATE employee SET name=?,city=? WHERE id=?',(name,city,eid)).rowcount!=1:raise ValueError('Сотрудник не найден')
+                        else:c.execute('INSERT INTO employee(id,name,city) VALUES(?,?,?)',(eid,name,city))
+                    c.commit();return self.send({'ok':True})
                 if path=='/api/import':
                     if c.execute("SELECT 1 FROM season WHERE status='open'").fetchone():raise ValueError('Импорт доступен только вне открытого голосования')
                     a=import_employees(base64.b64decode(d['file'],validate=True));c.executemany('INSERT INTO employee(id,name,city) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,city=excluded.city,active=1',a);c.commit();return self.send({'count':len(a)})
@@ -126,7 +138,10 @@ class H(BaseHTTPRequestHandler):
                     a=rows(c,'SELECT e.id,e.name,e.city FROM employee e LEFT JOIN participation p ON p.year=? AND p.employee=e.id WHERE e.active=1 AND COALESCE(p.used,0)=0 AND (?=\'\' OR e.city=?) AND (?=\'\' OR e.id=?) AND (p.code_hash IS NULL OR ?=1)',(y,d.get('city',''),d.get('city',''),d.get('employee',''),d.get('employee',''),int(bool(d.get('replace')))));out=[]
                     for e in a:
                         code=makecode();c.execute('INSERT INTO participation(year,employee,code_hash) VALUES(?,?,?) ON CONFLICT(year,employee) DO UPDATE SET code_hash=excluded.code_hash WHERE used=0',(y,e['id'],digest(code)));out.append([e['name'],e['city'],code])
-                    c.commit();return self.send({'rows':out})
+                    w=Workbook();ws=w.active;ws.title='Коды';ws.append(['Сотрудник','Подразделение','Код']);
+                    for row in out:ws.append(["'"+v if v.startswith(('=','+','-','@')) else v for v in row])
+                    for col,width in [('A',42),('B',32),('C',28)]:ws.column_dimensions[col].width=width
+                    buf=io.BytesIO();w.save(buf);c.commit();return self.send({'rows':out,'file':base64.b64encode(buf.getvalue()).decode()})
                 if path=='/api/status':
                     new=d.get('status');allowed={'draft':'open','open':'closed'}
                     if allowed.get(status)!=new:raise ValueError('Недопустимый переход')
