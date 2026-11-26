@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS season(year INTEGER PRIMARY KEY, status TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS participation(year INTEGER REFERENCES season,employee TEXT REFERENCES employee,code_hash TEXT UNIQUE,used INTEGER DEFAULT 0,PRIMARY KEY(year,employee));
 CREATE TABLE IF NOT EXISTS ballot(id TEXT PRIMARY KEY,year INTEGER REFERENCES season,candidate TEXT REFERENCES employee);
 INSERT OR IGNORE INTO season(year) VALUES(2026);''')
+        if not any(r['name']=='is_test' for r in c.execute('PRAGMA table_info(season)')):
+            c.execute('ALTER TABLE season ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0')
+        c.execute("CREATE TABLE IF NOT EXISTS archive_batch(id TEXT PRIMARY KEY,label TEXT NOT NULL)")
+        c.execute("CREATE TABLE IF NOT EXISTS archive_name(batch TEXT REFERENCES archive_batch(id),raw TEXT NOT NULL,n INTEGER NOT NULL,employee TEXT REFERENCES employee(id),PRIMARY KEY(batch,raw))")
 def digest(code): return hashlib.sha256(code.encode()).hexdigest()
 def norm(s):return re.sub(r'[^а-яa-z0-9]+',' ',s.lower().replace('ё','е')).strip()
 def matches(s,q):return all(any(w.startswith(t) for w in norm(s).split()) for t in norm(q).split())
@@ -91,9 +95,9 @@ class H(BaseHTTPRequestHandler):
                 if path=='/api/logout' and self.command=='POST':SESS.pop(sid,None);return self.send({'ok':True},cookie='')
                 if not s:return self.send({'role':None} if path=='/api/state' else {'error':'Войдите в систему'},200 if path=='/api/state' else 401)
                 if s['role']=='voter':
-                    y,e=s['year'],s['employee'];p=c.execute('SELECT p.used,s.status,e.active FROM participation p JOIN season s USING(year) JOIN employee e ON e.id=p.employee WHERE p.year=? AND p.employee=? AND p.code_hash=?',(y,e,s['hash'])).fetchone()
+                    y,e=s['year'],s['employee'];p=c.execute('SELECT p.used,s.status,s.is_test,e.active FROM participation p JOIN season s USING(year) JOIN employee e ON e.id=p.employee WHERE p.year=? AND p.employee=? AND p.code_hash=?',(y,e,s['hash'])).fetchone()
                     if not p or not p['active']:return self.send({'error':'Доступ отозван'},403)
-                    if path=='/api/state':return self.send({'role':'voter','year':y,'used':bool(p['used']),'status':p['status']})
+                    if path=='/api/state':return self.send({'role':'voter','year':y,'used':bool(p['used']),'status':p['status'],'is_test':bool(p['is_test'])})
                     if path=='/api/search' and self.command=='POST':
                         if p['used'] or p['status']!='open':raise ValueError('Голосование недоступно')
                         q=str(d.get('q',''))[:100];a=rows(c,'SELECT id,name,city FROM employee WHERE active=1 AND id<>? ORDER BY name',(e,));return self.send({'employees':[{'id':r['id'],'name':r['name'],'city':r['city']} for r in a if norm(q) and matches(r['name']+' '+r['city'],q)][:12]})
@@ -109,15 +113,19 @@ class H(BaseHTTPRequestHandler):
                 if path=='/api/state':return self.send({'role':'admin','seasons':rows(c,'SELECT * FROM season ORDER BY year DESC')})
                 if self.command!='POST':return self.send({'error':'Нет маршрута'},404)
                 y=int(d.get('year',2026));
-                if path in ('/api/new-season','/api/import','/api/codes','/api/status','/api/employee-save','/api/employee-toggle'):c.execute('BEGIN IMMEDIATE')
-                status=c.execute('SELECT status FROM season WHERE year=?',(y,)).fetchone()
+                if path in ('/api/new-season','/api/import','/api/codes','/api/status','/api/employee-save','/api/employee-toggle','/api/reset-test','/api/archive-import','/api/archive-match'):c.execute('BEGIN IMMEDIATE')
+                status=c.execute('SELECT status,is_test FROM season WHERE year=?',(y,)).fetchone()
                 if path=='/api/new-season':
                     if not 2026<=y<=2100:raise ValueError('Неверный год')
-                    c.execute('INSERT INTO season(year) VALUES(?)',(y,));c.commit();return self.send({'ok':True})
+                    c.execute('INSERT INTO season(year,is_test) VALUES(?,?)',(y,int(bool(d.get('is_test')))));c.commit();return self.send({'ok':True})
                 if not status:raise ValueError('Сезон не найден')
-                status=status[0]
+                is_test=bool(status[1]);status=status[0]
+                if path=='/api/reset-test':
+                    if not is_test or y==2026:raise ValueError('Сброс разрешён только тестовым сезонам')
+                    if d.get('confirm')!=str(y):raise ValueError('Подтвердите номер сезона')
+                    c.execute('DELETE FROM ballot WHERE year=?',(y,));c.execute('DELETE FROM participation WHERE year=?',(y,));c.execute("UPDATE season SET status='draft' WHERE year=?",(y,));c.commit();return self.send({'ok':True})
                 if path=='/api/dashboard':
-                    a=rows(c,'SELECT e.id,e.name,e.city,e.active,COALESCE(p.used,0) used,CASE WHEN p.code_hash IS NULL THEN 0 ELSE 1 END issued FROM employee e LEFT JOIN participation p ON e.id=p.employee AND p.year=? ORDER BY e.name',(y,));r=rows(c,'SELECT e.name,e.city,COUNT(*) votes FROM ballot b JOIN employee e ON e.id=b.candidate WHERE b.year=? GROUP BY e.id ORDER BY votes DESC,e.name',(y,)) if status=='closed' else [];return self.send({'employees':a,'ranking':r,'status':status})
+                    a=rows(c,'SELECT e.id,e.name,e.city,e.active,COALESCE(p.used,0) used,CASE WHEN p.code_hash IS NULL THEN 0 ELSE 1 END issued FROM employee e LEFT JOIN participation p ON e.id=p.employee AND p.year=? ORDER BY e.name',(y,));r=rows(c,'SELECT e.name,e.city,COUNT(*) votes FROM ballot b JOIN employee e ON e.id=b.candidate WHERE b.year=? GROUP BY e.id ORDER BY votes DESC,e.name',(y,)) if status=='closed' else [];return self.send({'employees':a,'ranking':r,'status':status,'is_test':is_test})
                 if path in ('/api/employee-save','/api/employee-toggle'):
                     if c.execute("SELECT 1 FROM season WHERE status='open'").fetchone():raise ValueError('Изменение справочника доступно только вне открытого голосования')
                     eid=str(d.get('id','')).strip();name=str(d.get('name','')).strip();city=str(d.get('city','')).strip()
@@ -147,6 +155,40 @@ class H(BaseHTTPRequestHandler):
                     if allowed.get(status)!=new:raise ValueError('Недопустимый переход')
                     if new=='open' and not c.execute('SELECT 1 FROM participation WHERE year=?',(y,)).fetchone():raise ValueError('Сначала выдайте коды')
                     c.execute('UPDATE season SET status=? WHERE year=?',(new,y));c.commit();return self.send({'ok':True})
+                if path=='/api/archive-import':
+                    raw=base64.b64decode(d['file'],validate=True);bid=hashlib.sha256(raw).hexdigest()
+                    if c.execute('SELECT 1 FROM archive_batch WHERE id=?',(bid,)).fetchone():raise ValueError('Этот файл уже импортирован')
+                    wb=load_workbook(io.BytesIO(raw),read_only=True,data_only=True);ws=wb.active;it=iter(ws.values);header=next(it,())
+                    if len(header)<4 or not all('сотрудника' in str(x).lower() for x in header[1:4]):raise ValueError('Ожидается архив Google Forms с тремя колонками кандидатов')
+                    counts={}
+                    for row in it:
+                        for value in row[1:4]:
+                            raw_name=str(value or '').strip()
+                            if raw_name:counts[raw_name]=counts.get(raw_name,0)+1
+                    if not counts:raise ValueError('Нет ответов')
+                    c.execute('INSERT INTO archive_batch VALUES(?,?)',(bid,str(d.get('label','Архив'))[:150]))
+                    people=rows(c,'SELECT id,name FROM employee')
+                    for name,n in counts.items():
+                        tokens=norm(name).split()
+                        exact=[p for p in people if sorted(tokens)==sorted(norm(p['name']).split())]
+                        eid=exact[0]['id'] if len(exact)==1 else None
+                        c.execute('INSERT INTO archive_name VALUES(?,?,?,?)',(bid,name,n,eid))
+                    c.commit();return self.send({'ok':True})
+                if path=='/api/archive-match':
+                    eid=str(d.get('employee','')) or None
+                    if eid and not c.execute('SELECT 1 FROM employee WHERE id=?',(eid,)).fetchone():raise ValueError('Сотрудник не найден')
+                    if c.execute('UPDATE archive_name SET employee=? WHERE batch=? AND raw=?',(eid,d.get('batch'),d.get('raw'))).rowcount!=1:raise ValueError('Запись не найдена')
+                    c.commit();return self.send({'ok':True})
+                if path=='/api/archive':
+                    return self.send({'batches':rows(c,'SELECT * FROM archive_batch ORDER BY label'),'names':rows(c,'SELECT * FROM archive_name ORDER BY n DESC,raw')})
+                if path=='/api/backup':
+                    # SQLite online backup, only authenticated administrators; no public path.
+                    import tempfile
+                    with tempfile.TemporaryDirectory() as tmp:
+                        target=Path(tmp)/'backup.sqlite3';dest=sqlite3.connect(target)
+                        try:c.backup(dest)
+                        finally:dest.close()
+                        return self.send({'file':base64.b64encode(target.read_bytes()).decode()})
                 if path=='/api/export':
                     kind=d.get('kind');w=Workbook();ws=w.active
                     if kind=='pending':
