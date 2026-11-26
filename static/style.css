@@ -23,3 +23,42 @@ h1{font-size:clamp(54px,8vw,108px);letter-spacing:-.075em;margin:18px 0 24px;fon
 .brand-logo{display:inline-flex;align-items:center;background:#fff;border-radius:12px;padding:6px 10px;flex-shrink:0}.brand-logo img{width:140px;height:auto;display:block}@media(max-width:600px){.brand-logo img{width:104px}}
 
 .brand-logo{background:transparent;padding:0;border-radius:0;max-width:210px;min-height:75px}.brand-logo img{width:180px;height:auto;visibility:hidden}.brand-logo img.brand-ready{visibility:visible}.brand-logo img.brand-fallback{visibility:visible;background:white;border-radius:8px}.shell header{align-items:center;gap:20px;padding:18px 0 22px}@media(max-width:600px){.brand-logo{min-height:48px}.brand-logo img{width:125px}.shell header{gap:10px}}
+
+/* Viewport-first composition. Keep overflow accessible, never clip forms. */
+.shell{min-height:100vh;min-height:100dvh;padding:12px 36px}
+.shell header{padding:8px 0 12px;flex:0 0 auto}
+.brand-logo{min-height:0}.brand-logo img{width:156px;max-height:68px;object-fit:contain}
+.shell footer{padding:12px 0;flex:0 0 auto;font-size:10px}
+#app{flex:1;min-height:0;display:flex;flex-direction:column}
+.hero{width:100%;max-width:740px;margin:auto;padding:12px 0 16px}
+.hero-index{display:none}
+.hero .eyebrow{font-size:10px;margin:0}
+.hero .award-art{width:clamp(95px,17vh,160px);height:clamp(69px,12vh,116px);margin:4px auto 6px}
+.hero h1{font-size:clamp(38px,7.8vh,82px);line-height:.97;letter-spacing:-.045em;margin:5px 0 12px}
+.hero>p{font-size:clamp(13px,1.9vh,17px);margin:6px 0 12px}
+.hero .panel{padding:clamp(14px,2.5vh,24px);margin:12px auto;max-width:520px}
+.hero .panel h2{font-size:clamp(16px,2.4vh,22px);margin:0 0 10px}
+.hero .panel label{margin:8px 0;font-size:12px}
+.hero .panel input{padding:11px 14px;margin:7px 0}
+.hero .panel button{padding:11px 14px}
+.hero .panel .hint{font-size:11px;line-height:1.45;margin:10px 0 0}
+.hero>small{font-size:10px}
+.hero #suggestions{max-height:clamp(65px,17vh,160px);overflow:auto;overscroll-behavior:contain}
+.hero .selected:empty{display:none}
+.hero .selected{padding:7px 0;font-size:12px}
+.hero .option{font-size:12px}
+@media(min-width:951px) and (min-height:520px){
+.shell:has(.admin-layout){height:100dvh;min-height:0}
+.admin-layout{flex:1;min-height:0;padding:16px 0;gap:24px}
+.side{position:static;max-height:100%;overflow:auto;align-self:stretch;padding:16px}
+.side h2{font-size:27px;margin:10px 0 14px}
+.side nav{gap:4px;margin-top:12px}.side nav button{padding:10px 12px}
+.side .hint{margin-top:16px}.side-year{padding-bottom:12px}
+.admin-body{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.admin-body .headline{font-size:28px;margin:7px 0 10px}
+.admin-body .toolbar{flex:0 0 auto}.admin-body .toolbar input,.admin-body .toolbar select{margin:3px 0;padding:10px 12px}
+.stats{margin:10px 0 12px;gap:8px;flex:0 0 auto}.stats .panel{padding:12px}.stats strong{font-size:28px;margin-top:5px}
+.admin-body #section{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;margin:0;padding:18px}
+}
+@media(max-width:600px){.shell{padding:10px 16px}.shell header{padding:5px 0 10px}.brand-logo img{width:125px;max-height:58px}.hero{padding:10px 0}.hero h1{font-size:clamp(32px,10vw,54px)}.hero .panel{padding:16px}.shell footer{font-size:9px}}
+@media(max-height:680px) and (min-width:760px){.hero{display:grid;grid-template-columns:1fr 1fr;align-content:center;align-items:center;column-gap:42px;max-width:1020px;text-align:left}.hero .eyebrow,.hero .award-art,.hero h1,.hero>p,.hero>small{grid-column:1}.hero .award-art{margin:0}.hero .panel{grid-column:2;grid-row:1/span 7;width:100%;margin:0}.hero h1{font-size:clamp(38px,7.5vh,65px)}.hero>small{margin-top:8px}}
