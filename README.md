@@ -12,13 +12,13 @@ Supabase project: gsxroprhnimtrzjhvuah. No API key is needed in the frontend. Th
 2. Set the administrator bcrypt hash in `people.admin_credential` using a trusted management connection. Do not put passwords, hashes or migration data in Git.
 3. Deploy `supabase/functions/people-api/index.ts` as `people-api`, with JWT gateway verification disabled: this function authenticates its own 256-bit bearer sessions. Both the SQL RPC and underlying tables reject anon/authenticated access.
 4. Run `node --test tests/static.test.mjs`, `deno check supabase/functions/people-api/index.ts`, and `node scripts/build.mjs`. Publish only `dist/`.
-5. Pages currently uses the `gh-pages` branch, root directory. The supplied Actions workflow can build from main after the migration is merged and Pages Source is changed to GitHub Actions. Do not merge merely to deploy Pages: main is still connected to Railway.
+5. Pages Source is GitHub Actions. `.github/workflows/pages.yml` tests and publishes only the static `dist/` directory on every push to main. The gh-pages branch retains the initial verified static snapshot.
 
 ## Private data migration and restoration
 
 Use Node 24+: `node scripts/prepare-import.mjs --sqlite PATH_TO_BACKUP PRIVATE_SQL_OUTSIDE_REPO`. The command reads SQLite in read-only mode, checks integrity and foreign keys, then prepares one transaction that refuses a nonempty target. Apply that private SQL through a trusted database connection; never upload it to GitHub, Actions artifacts or Pages. For a JSON backup downloaded from the admin panel, use `--json` instead. Admin credentials and sessions are deliberately excluded from backups. A restore into a new project requires recreating the admin credential separately.
 
-Compare every restored row, including IDs, code hashes, used flags and ballot candidates. A matching backup does not by itself prove the live Railway database has no newer writes. Keep Railway running until a fresh live backup is reconciled and the new public URL is verified.
+Compare every restored row, including IDs, code hashes, used flags and ballot candidates. A matching backup does not by itself prove the live Railway database has no newer writes. The supplied backup and a fresh live Railway backup were both fully reconciled before Railway was stopped.
 
 ## Behavior and privacy
 
@@ -34,4 +34,4 @@ Votes and participation flags are written atomically under a transaction lock. A
 
 ## Rollback
 
-Railway remains connected to main and its original persistent volume. Do not delete the Railway service or volume until final live reconciliation. If switching back after accepting votes on Supabase, export and reconcile those votes first; two independent writable databases must not both be used for the same season.
+Railway has no active deployment and is disconnected from GitHub. The service and original persistent volume are retained for recovery. To recover the legacy server, connect a branch at commit 39bf3ef2d50b7c98393a404f1a5055fcc8390688 and deploy with the existing volume and variables. If switching back after accepting votes on Supabase, export and reconcile those votes first; two independent writable databases must not both be used for the same season.
