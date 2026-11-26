@@ -3,6 +3,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from contextlib import contextmanager
 from http.cookies import SimpleCookie
+from urllib.parse import urlsplit
 from openpyxl import load_workbook, Workbook
 ROOT=Path(__file__).parent
 DB=os.getenv('PEOPLE_DB',str(ROOT/'data'/'people.sqlite3'))
@@ -62,10 +63,13 @@ class H(BaseHTTPRequestHandler):
                 if n>=maxn:raise ValueError('Слишком много попыток. Повторите через 5 минут.')
                 LIMIT[key]=(start,n+1)
     def do_GET(self):
+        self.path=urlsplit(self.path).path
+        if self.path=='/admin/':self.path='/admin'
         if self.path in ('/','/admin','/style.css','/app.js'):
             p=ROOT/'static'/({'/':'index.html','/admin':'index.html','/style.css':'style.css','/app.js':'app.js'}[self.path]);b=p.read_bytes();self.send_response(200);self.send_header('Content-Type',{'html':'text/html; charset=utf-8','css':'text/css','js':'text/javascript; charset=utf-8'}[p.suffix[1:]]);self.send_header('Content-Security-Policy',"default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'");self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
         self.api({})
     def do_POST(self):
+        self.path=urlsplit(self.path).path
         try:
             if self.headers.get('Content-Type','').split(';')[0]!='application/json':raise ValueError('Неверный формат запроса')
             n=int(self.headers.get('Content-Length','0'))
