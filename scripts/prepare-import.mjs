@@ -16,12 +16,13 @@ if(mode==='--sqlite'){
 }else{
  data=JSON.parse(await readFile(input,'utf8'));
  if(data.format!=='people-year-postgres-v1')throw Error('Unsupported backup');
+ if(Array.isArray(data.season_restart))schema.season_restart=['id','year','created_at','snapshot'];
 }
 const quote=v=>v===null?'null':"'"+String(v).replaceAll("'","''")+"'";
 const statements=['begin;','select pg_advisory_xact_lock(731682026);',"do $$ begin if exists(select 1 from people.employee) or exists(select 1 from people.season) then raise exception 'Target is not empty'; end if; end $$;"];
 for(const [t,cols] of Object.entries(schema)){
  if(!Array.isArray(data[t])||data[t].some(r=>cols.some(c=>r[c]===undefined)))throw Error('Invalid table '+t);
- if(data[t].length)statements.push('insert into people.'+t+'('+cols.join(',')+') values '+data[t].map(r=>'('+cols.map(c=>quote(r[c])).join(',')+')').join(',')+';');
+ if(data[t].length)statements.push('insert into people.'+t+'('+cols.join(',')+') values '+data[t].map(r=>'('+cols.map(c=>quote(typeof r[c]==='object'&&r[c]!==null?JSON.stringify(r[c]):r[c])).join(',')+')').join(',')+';');
  console.log(t+': '+data[t].length+' rows');
 }
 statements.push('commit;');

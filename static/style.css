@@ -64,3 +64,17 @@ h1{font-size:clamp(54px,8vw,108px);letter-spacing:-.075em;margin:18px 0 24px;fon
 @media(max-height:680px) and (min-width:760px){.hero{display:grid;grid-template-columns:1fr 1fr;align-content:center;align-items:center;column-gap:42px;max-width:1020px;text-align:left}.hero .eyebrow,.hero .award-art,.hero h1,.hero>p,.hero>small{grid-column:1}.hero .award-art{margin:0}.hero .panel{grid-column:2;grid-row:1/span 7;width:100%;margin:0}.hero h1{font-size:clamp(38px,7.5vh,65px)}.hero>small{margin-top:8px}}
 
 .code-danger{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #ffffff14}.code-danger button.ghost{border:1px solid #a34b36;color:#ffab91}.code-danger small{flex:1;min-width:160px;line-height:1.5}
+
+/* Shared turnout cards keep the public entry screen aligned with the admin dashboard. */
+.hero-turnout{width:100%;max-width:740px;margin:24px auto 18px;text-align:left;grid-column:1/-1}
+.turnout-heading{display:flex;justify-content:space-between;gap:12px;margin:0 3px 10px;color:#9ca3af;font-size:9px;font-weight:600;letter-spacing:.16em}
+.turnout-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.turnout-card{min-width:0;padding:16px 18px;border:1px solid #ffffff14;border-radius:18px;background:linear-gradient(145deg,#1c2027,#171a20);box-shadow:0 8px 24px #00000014}
+.turnout-card span{display:block;color:#a9adb7;font-size:11px;line-height:1.4}
+.turnout-card strong{display:block;margin-top:7px;color:#f16c36;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.season-controls{padding:20px;margin:24px 0;border:1px solid #e8522238;border-radius:16px;background:linear-gradient(120deg,#e852220c,#171a21 65%)}
+.season-controls h3{margin:8px 0;font-size:21px;letter-spacing:-.03em}.season-controls p{margin:6px 0 16px;font-size:13px}
+.season-control-actions{display:flex;gap:10px;flex-wrap:wrap}.season-control-actions button{flex:1;min-width:170px;font-size:13px}
+.season-controls .hint{margin:14px 0 0;font-size:11px;line-height:1.6}.restart-button{background:transparent;border:1px solid #f16c3670;color:#ffb494}
+@media(max-width:600px){.hero-turnout{margin:20px auto 16px}.turnout-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.turnout-card{padding:14px 16px;border-radius:14px}.turnout-card strong{font-size:28px}.season-controls{padding:16px}.turnout-heading{font-size:8px;letter-spacing:.12em}}
+@media(max-height:680px) and (min-width:760px){.hero .hero-turnout{grid-column:1/-1;margin-top:18px}.hero .turnout-card{padding:12px 16px}.hero .turnout-card strong{font-size:26px}}

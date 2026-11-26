@@ -35,3 +35,7 @@ Votes and participation flags are written atomically under a transaction lock. A
 ## Rollback
 
 Railway has no active deployment and is disconnected from GitHub. The service and original persistent volume are retained for recovery. To recover the legacy server, connect a branch at commit 39bf3ef2d50b7c98393a404f1a5055fcc8390688 and deploy with the existing volume and variables. If switching back after accepting votes on Supabase, export and reconcile those votes first; two independent writable databases must not both be used for the same season.
+
+## Season restart and public turnout
+
+The public entry page shows aggregate turnout for the current non-test season and refreshes every 30 seconds. No employee names, codes or candidate results are included. Admin Overview and Settings offer code revocation (preserves ballots) and full restart (requires the exact phrase ПЕРЕЗАПУСК YEAR). Restart atomically saves a private season_restart snapshot, clears this season’s ballots/participation and voter sessions, and returns the season to draft. Issue new codes and open voting to start again. Other seasons, employees and Google Forms archives are unchanged. Recovery snapshots are included in admin JSON backups and supported by prepare-import.mjs --json.

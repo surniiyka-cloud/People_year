@@ -4,7 +4,7 @@ import { unzipSync } from 'npm:fflate@0.8.2';
 const ORIGINS = new Set(['https://surniiyka-cloud.github.io', 'http://localhost:8085', 'http://127.0.0.1:8085']);
 const URL_BASE = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const routes = new Set(['state','login','admin-login','logout','search','vote','new-season','dashboard','employee-save','employee-toggle','import','codes','status','archive','archive-import','archive-match','backup','export','reset-codes','reset-test']);
+const routes = new Set(['public-stats','restart-season','state','login','admin-login','logout','search','vote','new-season','dashboard','employee-save','employee-toggle','import','codes','status','archive','archive-import','archive-match','backup','export','reset-codes','reset-test']);
 const hash = async (v: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)))).map(x=>x.toString(16).padStart(2,'0')).join('');
 const randomToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x=>x.toString(16).padStart(2,'0')).join('');
 const b64 = (bytes: Uint8Array) => { let s=''; for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192)); return btoa(s); };
@@ -43,7 +43,7 @@ Deno.serve(async req => {
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
  const action=new URL(req.url).pathname.split('/').filter(Boolean).at(-1)!;
  if(!routes.has(action))return send({error:'Нет маршрута'},404);
- if(req.method!=='POST'&&!(action==='state'&&req.method==='GET'))return send({error:'Метод не поддерживается'},405);
+ if(req.method!=='POST'&&!(['state','public-stats'].includes(action)&&req.method==='GET'))return send({error:'Метод не поддерживается'},405);
  try {
   let payload:Record<string,unknown>={};
   if(req.method==='POST'){

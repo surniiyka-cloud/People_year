@@ -1,0 +1,42 @@
+-- Integration assertions run in a transaction and leave all real seasons unchanged.
+begin;
+do $$
+declare a text; b text; response jsonb; baseline text; eligible_count integer; admin_key text:=gen_random_uuid()::text; voter_key text:=gen_random_uuid()::text;
+begin
+ if exists(select 1 from people.season where year=2098) then raise exception 'QA fixture year is already in use'; end if;
+ select id into a from people.employee order by id limit 1;
+ select id into b from people.employee where id<>a order by id limit 1;
+ select md5(string_agg(to_jsonb(t)::text,'' order by id)) into baseline from people.ballot t;
+ response:=public.people_api('restart-season','{"year":2098,"confirm":"ПЕРЕЗАПУСК 2098"}','no-session','qa');
+ assert (response->>'http_status')::integer=401,'Anonymous restart must fail';
+ insert into people.season(year,status,is_test) values(2098,'closed',0);
+ insert into people.participation values(2098,a,'qa-hash-'||admin_key,1);
+ insert into people.ballot values('qa-ballot-'||admin_key,2098,b);
+ insert into people.session(token_hash,role,year,employee,code_hash,expires) values(voter_key,'voter',2098,a,'qa-hash-'||admin_key,now()+interval '1 hour');
+ insert into people.session(token_hash,role,expires) values(admin_key,'admin',now()+interval '1 hour');
+ response:=public.people_api('restart-season','{"year":2098,"confirm":"ПЕРЕЗАПУСК 2098"}',voter_key,'qa');
+ assert (response->>'http_status')::integer=403,'Voters must not restart seasons';
+ response:=public.people_api('reset-codes','{"year":2098,"confirm":"2098"}',admin_key,'qa');
+ assert response->>'ok'='true','Code revocation must succeed';
+ assert exists(select 1 from people.participation where year=2098 and used=1 and code_hash is null),'Code revocation must preserve participation';
+ assert exists(select 1 from people.ballot where year=2098),'Code revocation must preserve votes';
+ response:=public.people_api('restart-season','{"year":2098,"confirm":"2098"}',admin_key,'qa');
+ assert response ? 'error','Incomplete confirmation must fail';
+ assert not exists(select 1 from people.season_restart where year=2098),'Failed confirmation cannot write a snapshot';
+ response:=public.people_api('restart-season','{"year":2098,"confirm":"ПЕРЕЗАПУСК 2098"}',admin_key,'qa');
+ assert response->>'ok'='true','A non-test season must be restartable';
+ assert exists(select 1 from people.season where year=2098 and status='draft'),'Restart must return to draft';
+ assert not exists(select 1 from people.participation where year=2098),'Restart must clear codes and used flags';
+ assert not exists(select 1 from people.ballot where year=2098),'Restart must clear votes';
+ assert not exists(select 1 from people.session where token_hash=voter_key),'Restart must revoke voter sessions';
+ assert exists(select 1 from people.session where token_hash=admin_key),'Restart must preserve the admin session';
+ assert exists(select 1 from people.season_restart where year=2098 and jsonb_array_length(snapshot->'ballot')=1 and jsonb_array_length(snapshot->'participation')=1 and snapshot->'season'->>'status'='closed'),'Snapshot must preserve the prior season';
+ assert baseline is not distinct from (select md5(string_agg(to_jsonb(t)::text,'' order by id)) from people.ballot t),'Other seasons must not change';
+ response:=public.people_api('backup','{"year":2098}',admin_key,'qa');
+ assert jsonb_array_length(response->'backup'->'season_restart')>=1,'Backups must include recovery snapshots';
+ response:=public.people_api('public-stats','{}','no-session','qa');
+ select count(*) into eligible_count from people.employee where active=1;
+ assert response->>'year'='2098' and (response->>'eligible')::integer=eligible_count and response->>'voted'='0','Public counters must reflect the restarted season';
+ assert not response ? 'employees' and not response ? 'ranking','Public counters must not expose people or choices';
+end $$;
+rollback;
