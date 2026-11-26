@@ -4,6 +4,8 @@ from pathlib import Path
 from contextlib import contextmanager
 from http.cookies import SimpleCookie
 from urllib.parse import urlsplit
+import binascii
+from zipfile import BadZipFile
 from openpyxl import load_workbook, Workbook
 ROOT=Path(__file__).parent
 DB=os.getenv('PEOPLE_DB',str(ROOT/'data'/'people.sqlite3'))
@@ -71,7 +73,7 @@ class H(BaseHTTPRequestHandler):
         self.path=urlsplit(self.path).path
         if self.path=='/admin/':self.path='/admin'
         if self.path in ('/','/admin','/style.css','/app.js'):
-            p=ROOT/'static'/({'/':'index.html','/admin':'index.html','/style.css':'style.css','/app.js':'app.js'}[self.path]);b=p.read_bytes();self.send_response(200);self.send_header('Content-Type',{'html':'text/html; charset=utf-8','css':'text/css','js':'text/javascript; charset=utf-8'}[p.suffix[1:]]);self.send_header('Content-Security-Policy',"default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'");self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
+            p=ROOT/'static'/({'/':'index.html','/admin':'index.html','/style.css':'style.css','/app.js':'app.js'}[self.path]);b=p.read_bytes();self.send_response(200);self.send_header('X-Content-Type-Options','nosniff');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Type',{'html':'text/html; charset=utf-8','css':'text/css','js':'text/javascript; charset=utf-8'}[p.suffix[1:]]);self.send_header('Content-Security-Policy',"default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
         self.api({})
     def do_POST(self):
         self.path=urlsplit(self.path).path
@@ -127,6 +129,7 @@ class H(BaseHTTPRequestHandler):
                 is_test=bool(status[1]);status=status[0]
                 if path=='/api/reset-test':
                     if not is_test or y==2026:raise ValueError('Сброс разрешён только тестовым сезонам')
+                    if status=='open':raise ValueError('Сначала закройте тестовое голосование')
                     if d.get('confirm')!=str(y):raise ValueError('Подтвердите номер сезона')
                     c.execute('DELETE FROM ballot WHERE year=?',(y,));c.execute('DELETE FROM participation WHERE year=?',(y,));c.execute("UPDATE season SET status='draft' WHERE year=?",(y,));c.commit();return self.send({'ok':True})
                 if path=='/api/dashboard':
@@ -205,7 +208,7 @@ class H(BaseHTTPRequestHandler):
                     buf=io.BytesIO();w.save(buf);return self.send({'file':base64.b64encode(buf.getvalue()).decode()})
                 return self.send({'error':'Нет маршрута'},404)
         except ValueError as e:self.send({'error':str(e)},400)
-        except (sqlite3.Error,KeyError,TypeError):self.send({'error':'Операция не выполнена. Проверьте данные.'},400)
+        except (sqlite3.Error,KeyError,TypeError,binascii.Error,BadZipFile):self.send({'error':'Операция не выполнена. Проверьте данные.'},400)
 if __name__=='__main__':
     if len(ADMIN)<16:raise SystemExit('Укажите ADMIN_PASSWORD длиной от 16 символов')
     init();ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','8080'))),H).serve_forever()
