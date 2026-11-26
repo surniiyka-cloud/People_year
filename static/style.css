@@ -62,3 +62,5 @@ h1{font-size:clamp(54px,8vw,108px);letter-spacing:-.075em;margin:18px 0 24px;fon
 }
 @media(max-width:600px){.shell{padding:10px 16px}.shell header{padding:5px 0 10px}.brand-logo img{width:125px;max-height:58px}.hero{padding:10px 0}.hero h1{font-size:clamp(32px,10vw,54px)}.hero .panel{padding:16px}.shell footer{font-size:9px}}
 @media(max-height:680px) and (min-width:760px){.hero{display:grid;grid-template-columns:1fr 1fr;align-content:center;align-items:center;column-gap:42px;max-width:1020px;text-align:left}.hero .eyebrow,.hero .award-art,.hero h1,.hero>p,.hero>small{grid-column:1}.hero .award-art{margin:0}.hero .panel{grid-column:2;grid-row:1/span 7;width:100%;margin:0}.hero h1{font-size:clamp(38px,7.5vh,65px)}.hero>small{margin-top:8px}}
+
+.code-danger{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #ffffff14}.code-danger button.ghost{border:1px solid #a34b36;color:#ffab91}.code-danger small{flex:1;min-width:160px;line-height:1.5}
